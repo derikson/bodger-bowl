@@ -168,9 +168,9 @@ var PlayerBonds = React.createClass({
 			);
 			editingPanel = (
 				<tr>
-					<td><input type="text" ref="warcasterInput" placeholder="Warcaster" /></td>
-					<td><input type="text" ref="warjackInput" placeholder="Warjack" /></td>
-					<td><input type="Text" ref="bondNameInput" placeholder="Bond Name" /></td>
+					<td><input type="text" list="faction-warcaster-list" ref="warcasterInput" placeholder="Warcaster" /></td>
+					<td><input type="text" list="faction-warjack-list"   ref="warjackInput"   placeholder="Warjack"   /></td>
+					<td><input type="text" list="faction-bond-name-list" ref="bondNameInput"  placeholder="Bond Name" /></td>
 					<td><input type="number" ref="bondNumberInput" placeholder="Number" /></td>
 					<td><Button bsStyle="primary" onClick={this.submitBond}>Submit</Button></td>
 				</tr>
@@ -268,8 +268,8 @@ var PlayerPotentialBonds = React.createClass({
 			);
 			editingPanel = (
 				<tr>
-					<td><input type="text" ref="warcasterPotential" placeholder="Warcaster" /></td>
-					<td><input type="text" ref="warjackPotential" placeholder="Warjack" /></td>
+					<td><input type="text" list="faction-warcaster-list" ref="warcasterPotential" placeholder="Warcaster" /></td>
+					<td><input type="text" list="faction-warjack-list"   ref="warjackPotential"   placeholder="Warjack"   /></td>
 					<td><input type="number" ref="bonusPotential" placeholder="Bonus" /></td>
 					<td><Button bsStyle="primary" onClick={this.submitBond}>Submit</Button></td>
 				</tr>
@@ -308,13 +308,16 @@ var PlayerEditorPanel = React.createClass({
 		}
 		this.setState({
 			season: data,
-			selectedPlayer: this.getSelectedPlayer(selectedPlayer.Name, data)
+			selectedPlayer: this.getSelectedPlayer(selectedPlayer.Name, data),
+			previousFactionBondInfo: this.previousFactionBondInfo(data)
 		});
 	},
 	getInitialState: function() {
+		var season = window.seasonStore.season;
 		return {
-			season: window.seasonStore.season,
+			season: season,
 			selectedPlayer: null,
+			previousFactionBondInfo: this.previousFactionBondInfo(season),
 		};
 	},
 	playerSelectionChange: function(event) {
@@ -335,6 +338,30 @@ var PlayerEditorPanel = React.createClass({
 	viewPlayer: function(playerName) {
 		this.setState({ selectedPlayer: this.getSelectedPlayer(playerName, this.state.season) });
 	},
+	// given a season, returns a map of faction names to warcaster, warjack, and bond names
+	previousFactionBondInfo: function(season) {
+		if (!season) return [];
+		var names = season.Players.reduce(function(names, player) {
+			var faction = player.Faction;
+			names[faction] = (names[faction] || { Warcasters: [], Warjacks: [], BondNames: [] } );
+			var bonds = (player.Bonds.ActiveBonds || []).concat(player.Bonds.PontentialBonds || []);
+			for (var i = 0; i < bonds.length; i++) {
+				if (names[faction].Warcasters.indexOf(bonds[i].Warcaster) == -1)
+					names[faction].Warcasters.push(bonds[i].Warcaster);
+				if (names[faction].Warjacks.indexOf(bonds[i].Warjack) == -1)
+					names[faction].Warjacks.push(bonds[i].Warjack);
+				if (bonds[i].BondName && names[faction].BondNames.indexOf(bonds[i].BondName) == -1)
+					names[faction].BondNames.push(bonds[i].BondName);
+			}
+			return names;
+		}, {});
+		for (faction in names) {
+			names[faction].Warcasters.sort();
+			names[faction].Warjacks.sort();
+			names[faction].BondNames.sort();
+		}
+		return names;
+	},
 	render: function() {
 		var admin = this.props.admin;
 		var players = [];
@@ -342,9 +369,27 @@ var PlayerEditorPanel = React.createClass({
 		if (this.state.season !== null) {
 			players = this.state.season.Players;
 		}
+
 		if (this.state.selectedPlayer) {
+
+			factionCache = this.state.previousFactionBondInfo[this.state.selectedPlayer.Faction]
+			var factionDatalists = []
+			if (admin) {
+
+				var warcasterOptions = factionCache.Warcasters.map(function(n, i) { return <option value={n} id={i}/>; });
+				factionDatalists.push(<datalist id="faction-warcaster-list">{warcasterOptions}</datalist>);
+
+				var warjackOptions   = factionCache.Warjacks.map(  function(n, i) { return <option value={n} id={i}/>; });
+				factionDatalists.push(<datalist id="faction-warjack-list">{warjackOptions}</datalist>);
+
+				var bondNameOptions  = factionCache.BondNames.map( function(n, i) { return <option value={n} id={i}/>; });
+				factionDatalists.push(<datalist id="faction-bond-name-list">{bondNameOptions}</datalist>);
+
+			}
+
 			tabbedArea =
 				<div>
+					{factionDatalists}
 					<PlayerCell player={this.state.selectedPlayer} noLink={true} />
 					<TabbedArea defaultActiveKey={1}>
 						<TabPane key={1} tab="Schedule">
